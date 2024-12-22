@@ -1,0 +1,49 @@
+// Define the region of interest (ROI) as a polygon for Nairobi, Kenya
+var nairobi = ee.Geometry.Polygon([
+  [
+    [36.7073, -1.4246],  // Bottom-left (longitude, latitude)
+    [37.0732, -1.4246],  // Bottom-right
+    [37.0732, -1.1458],  // Top-right
+    [36.7073, -1.1458],  // Top-left
+    [36.7073, -1.4246]   // Close the polygon
+  ]
+]);
+
+// Load the ImageCollection for building data
+var col = ee.ImageCollection('GOOGLE/Research/open-buildings-temporal/v1');
+
+/**
+ * Adds building presence and height layers for a given timestamp.
+ * @param {number} millis Timestamp in milliseconds.
+ */
+function addLayers(millis) {
+  // Create a mosaic of tiles with the same timestamp
+  var mosaic = col.filter(ee.Filter.eq('system:time_start', millis)).mosaic();
+  var year = new Date(millis).getFullYear();
+  
+  // Clip the image to the Nairobi region
+  var clippedMosaic = mosaic.clip(nairobi);
+  
+  Map.addLayer(
+      clippedMosaic.select('building_presence'), {max: 1},
+      'building_presence_conf_' + year);
+  Map.addLayer(
+      clippedMosaic.select('building_height'), {max: 100}, 'building_height_m_' + year,
+      /*shown=*/ false);
+};
+
+// Get the latest 8 years of the dataset
+var ts = col.filterBounds(nairobi)  // Use nairobi instead of madurai
+             .aggregate_array('system:time_start')
+             .distinct()
+             .sort()
+             .getInfo()
+             .slice(-8); // Get the last 8 unique timestamps
+
+// Add layers for the most recent 8 years
+ts.forEach(function(timestamp) {
+  addLayers(timestamp);
+});
+
+// Center the map on the Nairobi region
+Map.centerObject(nairobi, 12);
